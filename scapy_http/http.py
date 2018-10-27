@@ -7,6 +7,7 @@ import re
 from scapy.packet import Packet, bind_layers
 from scapy.fields import StrField
 from scapy.layers.inet import TCP
+from scapy.modules.six import PY3
 
 
 def _canonicalize_header(name):
@@ -36,8 +37,12 @@ def _parse_headers_and_body(s):
         headers = s[:crlfcrlfIndex + len(crlfcrlf)].decode("utf-8")
         body = s[crlfcrlfIndex + len(crlfcrlf):]
     except:
-        headers = s
-        body = ''
+        if PY3:
+            headers = s.decode()
+            body = b''
+        else:
+            headers = s
+            body = ''
     first_line, headers = headers.split("\r\n", 1)
     return first_line.strip(), _parse_headers(headers), body
 
@@ -71,18 +76,25 @@ def _get_field_value(obj, name):
     if name != 'Headers':
         return val
     # Headers requires special handling, as we give a parsed representation of it.
+    if PY3:
+        val = val.decode()
     headers = _parse_headers(val)
     val = []
     for header_name in headers:
         try:
             header_value = obj.getfieldval(header_name.capitalize())
+            if PY3:
+                header_value = header_value.decode()
             # If we provide a parsed representation for this header
             headers[header_name] = header_value
             val.append('%s: %s' % (header_name.capitalize(), header_value))
         except AttributeError as e:
             # If we don't provide a parsed representation
             val.append(headers[header_name])
-    return '\r\n'.join(val)
+    if PY3:
+        return '\r\n'.join(val).encode()
+    else:
+        return '\r\n'.join(val)
 
 
 def _self_build(obj, field_pos_list=None):
